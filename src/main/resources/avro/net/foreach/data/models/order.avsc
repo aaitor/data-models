@@ -1,0 +1,32 @@
+{
+        "type": "record",
+        "name": "Order",
+        "namespace": "net.foreach.data.models.avro",
+        "fields": [
+          {"name": "orderId", "type": "string"},
+          {"name": "clientId", "type": "string"},
+          {"name": "latitude", "type": "double"},
+          {"name": "longitude", "type": "double"},
+          {"name": "paymentMethod", "type": "string"},
+          {"name": "cardNumber", "type": "string"},
+          {"name": "shoppingCenterId", "type": "long"},
+          {"name": "employeeId", "type": "int"},
+          {"name": "orderDatetime", "type": "string"},
+          {"name": "lines", "type": {
+           "type": "array",
+           "items":{
+                        "name":"Line",
+                        "namespace": "net.foreach.data.models.avro",
+                        "type":"record",
+                        "fields":[
+                            {"name":"productId", "type":"string"},
+                            {"name":"productName", "type":"string"},
+                            {"name":"quantity", "type":"double"},
+                            {"name":"price", "type":"double"}
+                        ]
+                    }
+           }
+          }
+
+        ]
+}

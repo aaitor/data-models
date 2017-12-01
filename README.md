@@ -17,5 +17,7 @@ You can import the beans generated adding the following dependency to your proje
         </dependency>
 ```
 
-
+kafka-topics --list --zookeeper zookeeper:2181
+ kafka-console-consumer --bootstrap-server localhost:9092 --topic orders --from-beginning
+ 
 

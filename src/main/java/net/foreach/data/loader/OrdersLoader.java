@@ -12,9 +12,11 @@ import net.foreach.data.utils.Randomizer;
 import net.foreach.data.utils.args.OrdersArgsParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.ParseException;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -53,29 +55,46 @@ public class OrdersLoader {
         long timeElapsed= 0L;
         int transactionsCounter= 0;
 
+        log.info("Starting Producer");
+
+        Order order= null;
+        ProducerCallback callback= new ProducerCallback();
+
         while (continueRunning) {
+            order= Randomizer.getRandomOrder();
             if (tps >0) {
                 if (transactionsCounter< tps) {
-                    producer.send(new ProducerRecord<>(topic, "", Randomizer.getRandomOrder()));
+                    log.info("Producing Order (t:" + transactionsCounter + ") = " + order.getOrderId());
+                    ProducerRecord data= new ProducerRecord<>(topic, order);
+                    producer.send(data, callback);
                     transactionsCounter++;
                 }   else    {
+                    log.info("TPS cap reached. Waiting ....");
+                    transactionsCounter= 0;
                     Thread.sleep(WAIT);
                 }
             }   else {
-                producer.send(new ProducerRecord<>(topic, "", Randomizer.getRandomOrder()));
+                log.info("Producing Order = " +  order.getOrderId());
+                //producer.send(new ProducerRecord<>(topic, order.getOrderId(), order), callback);
+                ProducerRecord data= new ProducerRecord<>(topic, order);
+                producer.send(data, callback);
             }
 
             timeElapsed= System.currentTimeMillis() - startTime;
-            if (duration >0 && (timeElapsed* 1000L >= duration))
-                continueRunning= false;
+            if (duration >0 && (timeElapsed >= duration * 1000L)) {
+                log.info("Time elaspsed: " + timeElapsed + "ms. Stopping producer");
+                continueRunning = false;
+            }
         }
+
+        producer.close();
 
     }
 
     public static OrdersLoader builder(OrdersArgsParser argsParser)  {
         OrdersLoader loader= new OrdersLoader();
         loader.props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, argsParser.getBrokers());
-
+        loader.props.put(ProducerConfig.ACKS_CONFIG, "all");
         // Key and Value serializers (String and Avro)
         loader.props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
@@ -98,6 +117,18 @@ public class OrdersLoader {
         return loader;
     }
 
+    private static class ProducerCallback implements Callback {
+        @Override
+        public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+            if (e != null) {
+                log.error("Error while producing message to topic :" + recordMetadata);
+                e.printStackTrace();
+            } else {
+                String message = String.format("Sent message to topic:%s partition:%s  offset:%s", recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset());
+                log.info(message);
+            }
+        }
+    }
 
 
     public static void main(String [] args) throws Exception {
@@ -117,6 +148,7 @@ public class OrdersLoader {
             System.exit(1);
         }
 
+        log.info("Initializing loader with the following parameters:" + argsParser.toString());
         loader.run(loader.producer, argsParser.getTopic(), argsParser.getTps(), argsParser.getDuration());
     }
 
